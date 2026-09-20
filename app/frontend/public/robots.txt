@@ -1,0 +1,10 @@
+# Dogo-Paw
+#
+# The admin dashboard is already guarded server-side and shows nothing without
+# an admin token, so this is tidiness rather than a security control — a
+# disallow rule is a request, not an access restriction.
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /login

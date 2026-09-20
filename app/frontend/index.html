@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Dogo-Paw — a volunteer-run, shelterless dog rescue. Adopt, foster, or volunteer, and find your match with our AI adoption matcher."
+    />
+    <title>Dogo-Paw — Rescue, Foster, Adopt</title>
+    <meta name="theme-color" content="#96a65c" />
+
+    <!--
+      Sharing preview. These are static: the app rewrites document.title per
+      route, but a crawler or a chat app reads the raw HTML before any
+      JavaScript runs, so per-route social tags would need server-side
+      rendering. One accurate site-level card is the honest thing to ship.
+
+      No absolute URL is hardcoded — og:image is site-relative, which the major
+      crawlers resolve against the page being shared, so this works on any
+      domain without being edited.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Dogo-Paw" />
+    <meta property="og:title" content="Dogo-Paw — Rescue, Foster, Adopt" />
+    <meta
+      property="og:description"
+      content="A volunteer-run, shelterless dog rescue. Adopt, foster, or volunteer, and find your match with our adoption matcher."
+    />
+    <meta property="og:image" content="/logo.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Dogo-Paw — Rescue, Foster, Adopt" />
+    <meta
+      name="twitter:description"
+      content="A volunteer-run, shelterless dog rescue. Adopt, foster, or volunteer, and find your match with our adoption matcher."
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

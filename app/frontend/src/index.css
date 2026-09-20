@@ -1,0 +1,107 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------
+   Dogo-Paw design tokens
+   Palette derived from the original site + logo linework.
+   --------------------------------------------------------------- */
+@theme {
+  --color-olive-50: #f6f8ef;
+  --color-olive-100: #e9eed7;
+  --color-olive-200: #d5dfb4;
+  --color-olive-300: #bccb8a;
+  --color-olive-400: #a6b76c;
+  --color-olive-500: #96a65c; /* primary */
+  --color-olive-600: #7a8a49;
+  --color-olive-700: #5e6b3a;
+  --color-olive-800: #4a5430;
+  --color-olive-900: #3d452a;
+
+  --color-amber-brand: #ffb851;
+  --color-amber-brand-dark: #e89a2c;
+  --color-rust: #c44647;
+  --color-rust-dark: #a53536;
+
+  --color-bark-50: #f7f5f2;
+  --color-bark-100: #ebe6df;
+  --color-bark-700: #4a3826;
+  --color-bark-800: #33240f;
+  --color-bark-900: #231609; /* footer bg / heading text */
+
+  --color-stone-neutral: #696764;
+
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    sans-serif;
+
+  --shadow-soft: 0 4px 20px -4px rgb(35 22 9 / 0.12);
+  --shadow-lift: 0 18px 40px -12px rgb(35 22 9 / 0.25);
+
+  --radius-card: 1.25rem;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bark-50 font-sans text-stone-neutral antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-bark-900 font-semibold tracking-tight;
+    text-wrap: balance;
+  }
+
+  /* Keyboard focus ring, consistent everywhere */
+  :focus-visible {
+    @apply outline-olive-600 outline-2 outline-offset-2;
+  }
+}
+
+/* Page width container used by every section */
+@utility shell {
+  @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3
+         text-sm font-semibold tracking-wide transition-all duration-200
+         active:scale-[0.98] sm:text-base;
+}
+
+@utility btn-primary {
+  @apply btn bg-olive-500 hover:bg-olive-600 text-white shadow-[0_8px_20px_-8px_rgb(150_166_92/0.9)];
+}
+
+@utility btn-accent {
+  @apply btn bg-amber-brand hover:bg-amber-brand-dark text-bark-900;
+}
+
+@utility btn-ghost {
+  @apply btn border-2 border-white/70 text-white backdrop-blur-sm hover:border-white hover:bg-white/15;
+}
+
+@utility card {
+  @apply rounded-card bg-white shadow-soft border-bark-100 border;
+}
+
+@utility eyebrow {
+  @apply text-olive-600 text-xs font-semibold tracking-[0.22em] uppercase;
+}
+
+/* Respect users who ask for less motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

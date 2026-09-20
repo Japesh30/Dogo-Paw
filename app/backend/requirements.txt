@@ -1,0 +1,23 @@
+Flask==3.1.3
+Flask-Cors==6.0.5
+Flask-SQLAlchemy==3.1.1
+PyJWT==2.13.0
+numpy==2.5.1
+python-dotenv==1.2.2
+Werkzeug==3.1.8
+joblib==1.5.3
+scikit-learn==1.9.0
+scipy==1.18.0
+
+# Production WSGI server. Flask's own server is single-threaded and explicitly
+# not for production; gunicorn is what actually serves the app on Render.
+# It is not used (and does not run) on Windows, where `python app.py` is the
+# development entry point instead.
+gunicorn==26.2.0
+
+# PostgreSQL driver, used only when DATABASE_URL points at Postgres.
+# Local development on SQLite never loads it, but it is a plain dependency
+# rather than an optional extra so the production image cannot be built
+# without it. [binary] ships prebuilt wheels, so no compiler is needed on the
+# host.
+psycopg[binary]==3.3.6

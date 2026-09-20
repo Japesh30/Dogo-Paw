@@ -1,0 +1,41 @@
+# Everything here is regenerable — `npm install`, `pip install -r
+# requirements.txt`, `npm run build`. None of it belongs in a submission zip or
+# a repository: node_modules and .venv alone are several hundred megabytes.
+
+# --- JavaScript ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-error.log*
+
+# --- Python ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# --- Runtime state, per-machine ---
+# The database is created and seeded automatically on first run, and .secret_key
+# is generated per machine — shipping either would mean every copy shares a
+# signing key and inherits someone else's test data.
+*.db
+.secret_key
+
+# Every env file, in both apps. `.env.*` matters as much as `.env`: Vite also
+# reads .env.production / .env.development / .env.local, and one of those
+# committed by habit is how a deployment's configuration ends up public.
+# .env.example is kept on purpose — it is the documented template and holds
+# only placeholders.
+.env
+.env.*
+!.env.example
+
+# --- Editors / OS ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

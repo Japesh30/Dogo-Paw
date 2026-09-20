@@ -1,0 +1,111 @@
+{
+  "metrics": {
+    "n_samples": 300,
+    "n_features": 17,
+    "train_accuracy": 0.7422,
+    "test_accuracy": 0.6533,
+    "roc_auc": 0.7564,
+    "cv_accuracy_mean": 0.69,
+    "cv_accuracy_std": 0.0523,
+    "bayes_ceiling": 0.7006,
+    "pct_of_ceiling": 0.9849,
+    "positive_rate": 0.47,
+    "confusion_matrix": [
+      [
+        25,
+        15
+      ],
+      [
+        11,
+        24
+      ]
+    ]
+  },
+  "coefficients": [
+    {
+      "feature": "kid_conflict",
+      "coefficient": -0.9689,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "pet_conflict",
+      "coefficient": -0.7513,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "space_gap",
+      "coefficient": -0.5894,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "energy_gap",
+      "coefficient": -0.5662,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "adopter_experience",
+      "coefficient": 0.4435,
+      "effect": "increases success"
+    },
+    {
+      "feature": "dog_medical_needs",
+      "coefficient": -0.3822,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "dog_good_with_other_pets",
+      "coefficient": -0.3123,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "experience_shortfall",
+      "coefficient": -0.3028,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "adopter_has_kids",
+      "coefficient": 0.2077,
+      "effect": "increases success"
+    },
+    {
+      "feature": "dog_energy",
+      "coefficient": 0.1941,
+      "effect": "increases success"
+    },
+    {
+      "feature": "adopter_has_other_pets",
+      "coefficient": -0.1919,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "dog_space",
+      "coefficient": 0.1485,
+      "effect": "increases success"
+    },
+    {
+      "feature": "dog_experience_required",
+      "coefficient": -0.0774,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "adopter_activity",
+      "coefficient": -0.0715,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "dog_good_with_kids",
+      "coefficient": -0.0254,
+      "effect": "reduces success"
+    },
+    {
+      "feature": "experience_gap",
+      "coefficient": 0.0217,
+      "effect": "increases success"
+    },
+    {
+      "feature": "adopter_space",
+      "coefficient": 0.0003,
+      "effect": "increases success"
+    }
+  ]
+}

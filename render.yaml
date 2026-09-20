@@ -1,0 +1,76 @@
+# Render Blueprint for the Dogo-Paw backend.
+#
+# Committing this keeps the deployment configuration in the repository and
+# reviewable, rather than living only in dashboard settings nobody can see.
+# Render reads it from the repository root; `rootDir` points it at the backend.
+#
+# NO SECRETS BELONG IN THIS FILE. It is committed to git. Every secret below is
+# declared with `sync: false`, which tells Render "this exists, ask the operator
+# for it" — the value is entered in the dashboard and never stored here.
+#
+# Full walkthrough: docs/DEPLOYMENT_BACKEND.md
+
+services:
+  - type: web
+    name: dogo-paw-api
+    runtime: python
+    plan: free
+    region: singapore # closest to the Supabase region used for this project
+
+    # Everything below runs inside app/backend, which is what lets `app:app`
+    # and `from auth import ...` resolve — the backend's modules are top-level
+    # imports, not a package.
+    rootDir: app/backend
+
+    buildCommand: pip install -r requirements.txt
+
+    # Gunicorn, never Flask's development server. Settings (workers, threads,
+    # timeouts, and why they are those numbers) live in gunicorn.conf.py, which
+    # gunicorn picks up automatically from this directory.
+    #
+    # `app:app` = the module app.py, the WSGI callable `app` inside it.
+    startCommand: gunicorn app:app
+
+    # Render restarts the service if this stops returning 2xx. It is a pure
+    # liveness check that touches no database, so a brief Supabase blip does not
+    # cause a restart loop.
+    healthCheckPath: /api/health
+
+    envVars:
+      # Pinned rather than left to Render's default, so a change to their base
+      # image cannot silently move the app to a Python with no wheels for
+      # numpy/scipy/scikit-learn. Also pinned in app/backend/.python-version.
+      - key: PYTHON_VERSION
+        value: 3.13.7
+
+      # Turns on every strict production check: the app refuses to start
+      # without SECRET_KEY, CORS_ORIGINS and ADMIN_PASSWORD, refuses a
+      # wildcard CORS origin, and will not run the development server.
+      - key: APP_ENV
+        value: production
+
+      # Render generates a strong random value once and keeps it stable across
+      # deploys — which is exactly what JWT signing needs. A key that changed on
+      # each restart would sign every user out.
+      - key: SECRET_KEY
+        generateValue: true
+
+      # --- Entered in the dashboard, never committed ----------------------- #
+
+      # Supabase session pooler URL (port 6543), including ?sslmode=require.
+      - key: DATABASE_URL
+        sync: false
+
+      # Password for the seeded admin account. Minimum 12 characters.
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # The Vercel origin, e.g. https://dogo-paw.vercel.app
+      # Comma-separated if there is more than one. "*" is refused in production.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Two workers is ~317 MB of the free tier's 512 MB. See gunicorn.conf.py
+      # for the measurements behind this number.
+      - key: WEB_CONCURRENCY
+        value: 2
