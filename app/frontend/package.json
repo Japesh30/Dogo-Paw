@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
+    "test": "node test_components.mjs && node test_frontend.mjs",
+    "test:components": "node test_components.mjs",
+    "test:api": "node test_frontend.mjs",
     "preview": "vite preview",
     "optimize:images": "node scripts/optimize-images.mjs",
     "build:dog-photos": "node scripts/build-dog-photos.mjs"

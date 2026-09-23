@@ -156,7 +156,7 @@ cd app/backend
 python test_recommender.py
 ```
 
-## The four ML components
+## The five ML components
 
 | Feature | Paradigm | Model | Headline metric |
 |---|---|---|---|
@@ -164,6 +164,13 @@ python test_recommender.py
 | Adoption success | supervised | LogisticRegression | **65.3% test**, 69.0% CV, AUC 0.756 (ceiling 70.1%) |
 | Adopter segments | unsupervised | KMeans | k chosen by silhouette; labels derived from centroids |
 | FAQ assistant | NLP | TF-IDF + MultinomialNB | **75.0%** on a once-only test set; 90% useful responses |
+| Health anomaly detection | unsupervised | IsolationForest over longitudinal features | **70% recall / 66% precision** on held-out *synthetic* dogs |
+
+The health anomaly detector **finds unusual patterns in a dog's recorded
+observations and surfaces them for review. It does not diagnose anything.** It
+is trained on synthetic development data, because the application holds only a
+handful of real observations — that limitation, and everything else about it,
+is written up in [`docs/REASONING.md`](docs/REASONING.md).
 
 Full write-up, including why the success model's 69% is near-optimal rather
 than mediocre, is in [`app/README.md`](app/README.md).
@@ -175,6 +182,8 @@ cd app/backend
 python -m ml.success_model     # train + evaluate the success predictor
 python -m ml.chatbot           # train + evaluate the intent classifier
 python -m ml.segmentation      # cluster the live adopter table and print
+python -m ml.train_health_anomaly_model   # train + evaluate the anomaly detector
+python -m ml.health_anomaly_data --summary  # inspect the synthetic training data
 ```
 
 ## The admin dashboard

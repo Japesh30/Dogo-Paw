@@ -97,4 +97,55 @@ export const api = {
     request('/recommend', { method: 'POST', body: profile, auth: true }),
   adminStats: () => request('/admin/stats', { auth: true }),
   adopterSegments: () => request('/admin/adopter-segments', { auth: true }),
+
+  // --- Medical records, health analysis and alerts -----------------------
+  //
+  // Every one of these needs a token: reading requires a signed-in user and
+  // writing requires an admin, which the backend enforces. The UI hides what
+  // a non-admin cannot do, but the server is what actually says no.
+  //
+  // `kind` is the record type as the API spells it: 'records', 'vaccinations',
+  // 'medications', 'observations' or 'follow-ups'.
+  medicalSummary: (dogId) => request(`/dogs/${dogId}/medical`, { auth: true }),
+  medicalList: (dogId, kind) => request(`/dogs/${dogId}/medical/${kind}`, { auth: true }),
+  medicalCreate: (dogId, kind, body) =>
+    request(`/dogs/${dogId}/medical/${kind}`, { method: 'POST', body, auth: true }),
+  medicalUpdate: (dogId, kind, id, body) =>
+    request(`/dogs/${dogId}/medical/${kind}/${id}`, { method: 'PATCH', body, auth: true }),
+
+  healthAnalysis: (dogId) =>
+    request(`/dogs/${dogId}/medical/health-analysis`, { auth: true }),
+  healthAnalysisSummary: (dogId) =>
+    request(`/dogs/${dogId}/medical/health-analysis/summary`, { auth: true }),
+
+  dogAlerts: (dogId, status) =>
+    request(`/dogs/${dogId}/medical/health-alerts${status ? `?status=${status}` : ''}`, {
+      auth: true,
+    }),
+  syncAlerts: (dogId) =>
+    request(`/dogs/${dogId}/medical/health-alerts/sync`, { method: 'POST', auth: true }),
+
+  // The admin queue. Filters are passed straight through to the API, which
+  // does the filtering — the UI never re-filters a partial list itself.
+  adminAlerts: ({ status, severity, dogId, limit } = {}) => {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (severity) params.set('severity', severity)
+    if (dogId) params.set('dog_id', dogId)
+    if (limit) params.set('limit', limit)
+    const query = params.toString()
+    return request(`/admin/health-alerts${query ? `?${query}` : ''}`, { auth: true })
+  },
+  acknowledgeAlert: (alertId) =>
+    request(`/admin/health-alerts/${alertId}`, {
+      method: 'PATCH',
+      body: { action: 'acknowledge' },
+      auth: true,
+    }),
+  resolveAlert: (alertId, resolutionNote) =>
+    request(`/admin/health-alerts/${alertId}`, {
+      method: 'PATCH',
+      body: { action: 'resolve', ...(resolutionNote ? { resolution_note: resolutionNote } : {}) },
+      auth: true,
+    }),
 }

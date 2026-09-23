@@ -54,7 +54,7 @@ and the verification for each step.
                     │  rootDir app/backend     │   ML models loaded at boot
                     └────────────┬─────────────┘
                                  │  TLS, sslmode=require
-                                 │  session pooler :6543
+                                 │  session pooler :5432
                                  ▼
                     ┌──────────────────────────┐
                     │  Supabase PostgreSQL     │   7 tables
@@ -73,13 +73,19 @@ The database has no dependencies, so it goes first.
 1. [supabase.com](https://supabase.com) → **New project**. Choose a region near
    you and set a database password — **it is shown once**.
 2. Wait for provisioning (~2 minutes).
-3. **Project Settings → Database → Connection string → Session pooler**.
-   Copy the URI. It ends in port **6543**.
+3. **Project Settings → Database → Connection string → Session Pooler**.
+   Copy the URI. It ends in port **5432**.
 4. Substitute your database password for the `[YOUR-PASSWORD]` placeholder, and
    make sure it ends with `?sslmode=require`.
 
-Use the **session pooler (6543)**, not the direct connection (5432): Render runs
-several workers and restarts often, which exhausts the direct connection limit.
+Use the **Session Pooler (port 5432 on the `…pooler.supabase.com` host)**, not
+the direct connection (`db.PROJECT_REF.supabase.co`): Render runs several
+workers and restarts often, which exhausts the direct connection limit.
+
+On the pooler host the port selects the mode — **5432 is the Session Pooler**
+and 6543 is the Transaction Pooler. Session mode is required here, because
+Alembic migrations and psycopg's prepared statements both need a connection
+that outlives a single transaction.
 
 ### ✅ Verify before continuing
 
@@ -442,7 +448,7 @@ None of these is a defect; all are documented free-tier trade-offs.
 | Site loads, **every API call fails** | `CORS_ORIGINS` mismatch | Must match exactly — `https://`, no trailing slash |
 | `admin123` still works | `APP_ENV` is not `production` | **Fix immediately** |
 | `Can't load plugin: ...postgres` | URL bypassed normalisation | Use the app's config path |
-| `too many connections` | Direct connection (5432) | Use the pooler (6543) |
+| `too many connections` | Direct connection (`db.PROJECT_REF.supabase.co`) | Use the Session Pooler host on port 5432 |
 | `/dogs/3` returns 404 | `vercel.json` not applied | Check Vercel's Root Directory |
 | `/api/model-info` → 503 | ML artifacts missing | Confirm `ml/artifacts/*.joblib` are committed |
 | First request very slow | Cold start | Normal — wait ~50 s |

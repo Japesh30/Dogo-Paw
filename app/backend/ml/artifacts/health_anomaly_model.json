@@ -1,0 +1,123 @@
+{
+  "model_version": "health-anomaly-v1",
+  "algorithm": "IsolationForest (StandardScaler pipeline)",
+  "task": "unsupervised anomaly detection over longitudinal health observations",
+  "not_a_diagnosis": "Scores how unusual an observation is against the same dog's recent history. It does not identify, diagnose or rule out any condition.",
+  "dataset": {
+    "source": "synthetic development data (ml/health_anomaly_data.py)",
+    "why_synthetic": "The application holds only a small local demo fixture of real observations, far too few to train on. No real medical data was used.",
+    "dogs_total": 420,
+    "dogs_train": 294,
+    "dogs_holdout": 126,
+    "train_rows": 2646,
+    "holdout_rows": 1134,
+    "planted_anomaly_rate_train": 0.0729,
+    "scenarios": {
+      "stable": "normal",
+      "gradual_weight_gain": "normal",
+      "gradual_weight_decline": "anomalous",
+      "sudden_weight_drop": "anomalous",
+      "isolated_temperature_spike": "anomalous",
+      "repeated_abnormal_temperature": "anomalous",
+      "irregular_observation_spacing": "anomalous"
+    }
+  },
+  "features": [
+    "weight_pct_change",
+    "weight_dev_from_baseline",
+    "weight_z",
+    "weight_slope_pct",
+    "temp_change",
+    "temp_dev_from_baseline",
+    "temp_z",
+    "days_since_previous",
+    "interval_ratio"
+  ],
+  "parameters": {
+    "n_estimators": 300,
+    "max_samples": 256,
+    "contamination": 0.0729,
+    "random_state": 20260923
+  },
+  "score_reference": {
+    "note": "An anomaly score is the negated IsolationForest decision function, rescaled to 0-1 for display. It is NOT a probability and NOT a likelihood of illness.",
+    "train_score_p50": -0.109,
+    "train_score_p90": -0.0208,
+    "train_score_p99": 0.1468,
+    "train_score_min": -0.15,
+    "train_score_max": 0.2287
+  },
+  "evaluation": {
+    "note": "Measured against the synthetic generator's labels, not veterinary ground truth. These numbers say how reliably the model reproduces the patterns the generator planted.",
+    "evaluation_rows": 1134,
+    "confusion_matrix": {
+      "true_positive": 54,
+      "false_positive": 28,
+      "false_negative": 23,
+      "true_negative": 1029
+    },
+    "recall_on_planted_anomalies": 0.701,
+    "precision": 0.659,
+    "f1": 0.679,
+    "flagged_share": 0.072,
+    "per_scenario": {
+      "stable": {
+        "type": "normal",
+        "observations": 369,
+        "flagged": 4,
+        "false_positive_rate": 0.011
+      },
+      "gradual_weight_gain": {
+        "type": "normal",
+        "observations": 405,
+        "flagged": 7,
+        "false_positive_rate": 0.017
+      },
+      "gradual_weight_decline": {
+        "type": "anomalous",
+        "planted_observations": 22,
+        "detected": 20,
+        "detection_rate": 0.909,
+        "dogs": 7,
+        "dogs_flagged_at_least_once": 7
+      },
+      "sudden_weight_drop": {
+        "type": "anomalous",
+        "planted_observations": 9,
+        "detected": 9,
+        "detection_rate": 1.0,
+        "dogs": 9,
+        "dogs_flagged_at_least_once": 9
+      },
+      "isolated_temperature_spike": {
+        "type": "anomalous",
+        "planted_observations": 10,
+        "detected": 10,
+        "detection_rate": 1.0,
+        "dogs": 10,
+        "dogs_flagged_at_least_once": 10
+      },
+      "repeated_abnormal_temperature": {
+        "type": "anomalous",
+        "planted_observations": 30,
+        "detected": 9,
+        "detection_rate": 0.3,
+        "dogs": 8,
+        "dogs_flagged_at_least_once": 8
+      },
+      "irregular_observation_spacing": {
+        "type": "anomalous",
+        "planted_observations": 6,
+        "detected": 6,
+        "detection_rate": 1.0,
+        "dogs": 6,
+        "dogs_flagged_at_least_once": 6
+      }
+    },
+    "dogs_with_planted_anomaly": 40,
+    "dogs_flagged_at_least_once": 40,
+    "dog_level_recall": 1.0
+  },
+  "trained_at": "2026-09-23T03:24:27+00:00",
+  "sklearn_version": "1.9.0"
+}

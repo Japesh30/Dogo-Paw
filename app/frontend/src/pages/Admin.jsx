@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import AdminTabs from '../components/admin/AdminTabs'
 import Spinner from '../components/Spinner'
 import {
   ActivityChart,
@@ -136,6 +137,8 @@ export default function Admin() {
             Signed in as <span className="text-bark-900 font-semibold">{user.name}</span>
           </p>
         </header>
+
+        <AdminTabs />
 
         {/* --------------- Hero figure --------------- */}
         <section className="card mt-8 grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">

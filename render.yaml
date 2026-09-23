@@ -57,7 +57,11 @@ services:
 
       # --- Entered in the dashboard, never committed ----------------------- #
 
-      # Supabase session pooler URL (port 6543), including ?sslmode=require.
+      # Supabase Session Pooler URL — port 5432 — including ?sslmode=require.
+      # On the pooler host, 5432 is the Session Pooler and 6543 is the
+      # Transaction Pooler. Session mode is required: Alembic migrations and
+      # psycopg's prepared statements both need a connection that outlives a
+      # single transaction.
       - key: DATABASE_URL
         sync: false
 

@@ -15,6 +15,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
+from flask_migrate import Migrate
 from sqlalchemy import func
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -28,7 +29,8 @@ from auth import (
     login_required,
     revoke,
 )
-from ml import chatbot, segmentation, success_model
+import medical
+from ml import chatbot, health_anomaly_service, segmentation, success_model
 from models import (
     Adopter,
     ChatbotLog,
@@ -90,6 +92,10 @@ LIMITS = {
 MODEL_LOADERS = [
     ("success predictor", success_model.load_model),
     ("intent classifier", chatbot.load_model),
+    # Warmed here too, so the first health analysis does not pay the load and a
+    # missing or stale artifact shows up in the boot log rather than silently at
+    # the first request.
+    ("health anomaly detector", health_anomaly_service.load_model),
 ]
 
 # Accepted questionnaire answers, mirrored by the React form.
@@ -262,6 +268,9 @@ def create_app() -> Flask:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     db.init_app(app)
+    # render_as_batch: SQLite cannot ALTER most things in place, so generated
+    # migrations copy-and-swap the table there; PostgreSQL ignores it.
+    Migrate(app, db, directory=str(BASE_DIR / "migrations"), render_as_batch=True)
     CORS(
         app,
         resources={r"/api/*": {"origins": resolve_cors_origins()}},
@@ -271,16 +280,25 @@ def create_app() -> Flask:
     )
     app.before_request(load_user)
     register_routes(app)
+    app.register_blueprint(medical.bp)
+    app.register_blueprint(medical.admin_bp)
     register_error_handlers(app)
 
     # The backend name only. DATABASE_URL carries the database password, so it
     # must never reach a log line.
     print(f"database: {database_uri.split('://', 1)[0]} ({APP_ENV})")
 
-    with app.app_context():
-        from seed import seed
+    # Startup migrates and seeds by default, which is what keeps a Render deploy
+    # a single step. DB_AUTO_MIGRATE=false turns that off, so `flask db current`
+    # or `flask db upgrade --sql` can inspect a database without this process
+    # changing it first.
+    if os.environ.get("DB_AUTO_MIGRATE", "true").strip().lower() in {"false", "0", "no"}:
+        print("DB_AUTO_MIGRATE is off: skipping startup migration and seed")
+    else:
+        with app.app_context():
+            from seed import seed
 
-        seed()
+            seed()
 
     # Load the trained models once, at startup — never on a request. A missing
     # artifact is a warning, not a crash: the site still works without the
@@ -289,7 +307,10 @@ def create_app() -> Flask:
         try:
             loader()
             print(f"loaded {label}")
-        except FileNotFoundError as exc:
+        except Exception as exc:
+            # Every model here is an optional extra: a missing or unreadable
+            # artifact degrades one feature and must never stop the site from
+            # booting. The feature reports itself unavailable at request time.
             print(f"WARNING: {label} unavailable — {exc}")
 
     return app

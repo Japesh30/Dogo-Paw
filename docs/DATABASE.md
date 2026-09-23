@@ -12,7 +12,7 @@ verify, upgrade and back up the production database.
 | | Development | Production |
 |---|---|---|
 | Engine | **SQLite** — one file | **PostgreSQL** — Supabase |
-| Location | `app/backend/dogopaw.db` | Supabase project, session pooler on port 6543 |
+| Location | `app/backend/dogopaw.db` | Supabase project, Session Pooler on port **5432** |
 | Configured by | nothing — it is the default | `DATABASE_URL` |
 | Driver | built into Python | `psycopg` 3 |
 | Created by | `seed()` on first run | `seed()` on first boot, under an advisory lock |
@@ -81,13 +81,26 @@ the strict one so both behave the same.
 ### Getting the connection string
 
 1. Supabase dashboard → your project → **Project Settings → Database**.
-2. Under **Connection string**, choose the **Session pooler** (port **6543**),
-   not the direct connection on 5432.
+2. Under **Connection string**, choose the **Session Pooler** — port **5432**.
 3. Copy it and substitute your database password.
 
 ```
-postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require
+postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require
 ```
+
+**Which port, and why it matters.** On the pooler host
+(`…pooler.supabase.com`) the port chooses the pooling mode:
+
+| Port | Mode | Use it here? |
+|---|---|---|
+| **5432** | **Session Pooler** | **Yes** — this is what production uses |
+| 6543 | Transaction Pooler | No |
+
+Session mode keeps one server connection for the life of the client session,
+which is what Alembic migrations and psycopg's prepared statements need.
+Transaction mode returns the connection after every statement, which breaks
+both. The *direct* connection also uses 5432, but on a different host
+(`db.PROJECT_REF.supabase.co`) — the host is what tells them apart.
 
 **Use the pooler.** Render's free tier restarts often and gunicorn runs several
 workers; the direct connection has a low connection ceiling that this exhausts.
@@ -130,8 +143,9 @@ none of it:
 
 ## 4. Schema
 
-Seven tables. The same definitions produce both backends; PostgreSQL types
-shown.
+Seven core tables, plus five medical tables added by migration
+`0002_medical_foundation` (see "Medical records" below). The same definitions
+produce both backends; PostgreSQL types shown.
 
 ### `users`
 | Column | Type | Notes |
@@ -220,6 +234,80 @@ The JWT denylist that makes logout a real revocation.
 > This table holds real personal data — name, email, phone, home address. It is
 > why the admin account is the most sensitive credential in the system.
 
+### Medical records
+
+Five tables, each owned by one dog. Every one has `dog_id INTEGER NOT NULL`
+(**FK → dogs.id, ON DELETE CASCADE**, indexed), `recorded_by_id INTEGER NULL`
+(**FK → users.id, ON DELETE SET NULL**: who entered it), and `created_at` /
+`updated_at TIMESTAMP NOT NULL`. Calendar dates are `DATE`. Allowed values are
+enforced twice: by the API, and by a `CHECK` constraint in the database.
+
+| Table | Columns | Allowed values / constraints |
+|---|---|---|
+| `medical_records` | record_type `VARCHAR(20)`, title `VARCHAR(160)`, description `TEXT` NULL, veterinarian `VARCHAR(120)` NULL, visit_date `DATE` (indexed) | record_type: checkup, treatment, surgery, diagnostic, emergency, dental, other |
+| `vaccinations` | vaccine_name `VARCHAR(120)`, administered_date `DATE` NULL, next_due_date `DATE` NULL (indexed), status `VARCHAR(20)`, veterinarian, notes | status: scheduled, completed, overdue |
+| `medications` | medication_name `VARCHAR(120)`, dosage `VARCHAR(80)`, frequency `VARCHAR(80)`, start_date `DATE`, end_date `DATE` NULL (= ongoing), status (indexed), prescribed_by, notes | status: active, completed, discontinued |
+| `health_observations` | observation_date `DATE` (indexed), weight_kg `DOUBLE` NULL, temperature_c `DOUBLE` NULL, symptoms `JSON` NULL (list of strings), notes | 0 < weight_kg ≤ 120; 30 ≤ temperature_c ≤ 45 |
+| `follow_ups` | reason `VARCHAR(200)`, due_date `DATE` (indexed), completed_date `DATE` NULL, status (indexed), notes | status: pending, completed, missed, cancelled |
+
+These are **not** part of `Dog.to_dict()`: `/api/dogs` and `/api/dogs/<id>`
+return the same profile as before. Medical data is only served by the
+authenticated `/api/dogs/<id>/medical` endpoints (`medical.py`).
+
+Local demo data: `python medical_demo_data.py` adds a tagged fixture to five
+dogs; `--clear` removes it. It refuses any non-local database and
+`APP_ENV=production`.
+
+### Health alerts and notifications
+
+Added by migration `0003_health_alerts`.
+
+`health_alerts` records a health-intelligence finding so it can be worked on.
+Identity is **(dog_id, finding_code, entity_key)**, and the partial unique index
+`uq_health_alerts_active_identity` (`WHERE status != 'resolved'`) allows only one
+*active* alert per identity — that is what makes a repeated sync idempotent.
+Resolved rows sit behind it as history and are never reused; a recurrence
+becomes a new row pointing back through `reopened_from_id`.
+
+| Column group | Columns |
+|---|---|
+| What was found (copied from the finding) | category, finding_code, entity_key, severity, title, reason, evidence `JSON`, recommendation |
+| Snapshot | risk_score_at_detection (never updated) |
+| Lifecycle | status (`open`/`acknowledged`/`resolved`), first_detected_at, last_detected_at, detection_count |
+| Review | acknowledged_at/by_id, resolved_at/by_id, resolution_note, auto_resolved |
+| Links | dog_id (**FK → dogs, CASCADE**), acknowledged_by_id / resolved_by_id (**FK → users, SET NULL**), reopened_from_id (**self FK, SET NULL**) |
+
+`notifications` is an outbox: event_type, dog_id, alert_id, severity, payload
+`JSON`, status (`pending`/`sent`/`failed`), channel, created_at, delivered_at.
+**Nothing delivers from it** — every row this system writes stays `pending`.
+
+Alerts are never deleted, and none of this appears in `/api/dogs` responses.
+
+### No table for ML anomaly detection
+
+The anomaly detector (`docs/REASONING.md`) adds **no tables**. Its results are
+derived from `health_observations`, which are already stored, and recomputing
+them costs microseconds against a cached model — so a table of every inference
+would be a write path with no reader, going stale whenever the model changed.
+
+Where an anomaly matters it becomes an ordinary `health_alerts` row under the
+finding code `ml.health_anomaly`, which already persists the evidence, the
+score and the model version, and already has a lifecycle.
+
+### `0004_dog_id_sequence` — the dogs id sequence
+
+`seed.py` inserts the 18 dogs with explicit ids, and PostgreSQL only advances a
+`SERIAL` sequence when it supplies the value itself. So on every Postgres
+database built this way `dogs_id_seq` sits at 1 while `MAX(id)` is 18, and the
+first dog inserted **without** an explicit id fails with a duplicate key — as do
+the next 17 attempts. Nothing reaches this today because no endpoint creates
+dogs, which is exactly why it was worth fixing before one does.
+
+Migration `0004` reads `MAX(id)` and moves the sequence past it. It inserts,
+updates and deletes nothing and changes no schema, so it is safe against a live
+database. On SQLite it is a deliberate no-op (there are no sequences), and its
+downgrade does nothing, because rewinding would reintroduce the bug.
+
 ### Creation order
 
 SQLAlchemy sorts by dependency, so foreign keys always resolve:
@@ -253,6 +341,7 @@ that one convention is used everywhere, which it is.
 | `APP_ENV` | production | `development` | `production` makes the strict checks fire |
 | `ADMIN_PASSWORD` | production | dev-only password | Seeded admin's password; min 12 chars |
 | `SECRET_KEY` | production | generated `.secret_key` | JWT signing; min 32 chars |
+| `DB_AUTO_MIGRATE` | no | `true` | `false` skips the startup migration and seed; for inspecting a database with `flask db` |
 
 Full security context in [`SECURITY.md`](SECURITY.md). **Nothing above is ever
 committed** — `.env` and `.env.*` are gitignored, with only `.env.example`
@@ -266,10 +355,11 @@ tracked.
 first boot in both environments. It is **idempotent** — safe to run repeatedly:
 
 1. `ensure_columns()` — adds `dogs.photo_url` / `dogs.bio` to a database that
-   predates them. `create_all()` only creates missing *tables* and will not
-   touch an existing one, so without this an older database breaks on every dog
-   query. Uses plain `ALTER TABLE … ADD COLUMN`, which works on both engines.
-2. `create_all()` — creates any missing table.
+   predates them. The old `create_all()` never touched an existing table, so
+   without this an older database breaks on every dog query. Uses plain
+   `ALTER TABLE … ADD COLUMN`, which works on both engines.
+2. `migrate_to_head()` (`schema.py`) — brings the schema up to date with
+   Alembic. See §8.
 3. Dogs — inserted only if the table is empty; otherwise `photo_url` and `bio`
    are re-synced, since those are seed-owned content rather than user data.
 4. Accounts — created only if that email does not already exist.
@@ -296,8 +386,9 @@ with seed_lock():      # pg_advisory_lock(4207311) on PostgreSQL, no-op on SQLit
     _seed(force)
 ```
 
-This is why no separate "release command" or migration step is needed on Render:
-a plain deploy is safe on its own.
+Migrations run inside the same lock, so only one worker applies them. This is
+why no separate "release command" or migration step is needed on Render: a
+plain deploy is safe on its own.
 
 ### Seed accounts differ by environment
 
@@ -355,46 +446,61 @@ rules now apply.
 
 ## 8. Migrations and upgrades
 
-**There is no migration tool.** No Alembic, no Flask-Migrate. That is a
-deliberate choice for a project of this size, and worth being able to defend:
+The schema is managed by **Flask-Migrate / Alembic**, adopted before the
+medical-records work so new tables arrive as reviewed, versioned migrations.
+Migration files live in `app/backend/migrations/versions/`.
 
-- The schema is stable and owned by one person.
-- `create_all()` covers new tables.
-- `ensure_columns()` covers the one column-addition case that has actually
-  arisen, in about ten lines.
-- Alembic would add a dependency, a `migrations/` tree and a versioning workflow
-  to manage — real cost, for a schema that is not changing.
+### The baseline
 
-### Adding a column
+`0001_baseline` is the seven tables exactly as `create_all()` built them up to
+Phase 8. It is verified identical to the `create_all()` schema on both SQLite
+and PostgreSQL (`test_migrations.py`). It applies differently depending on the
+database:
 
-1. Add it to the model in `models.py` as **nullable** (existing rows have no
-   value for it).
-2. Add it to `LATER_COLUMNS` in `seed.py` with its SQL type.
-3. Deploy. `ensure_columns()` applies the `ALTER TABLE` in place on next boot,
-   keeping every existing row.
+| Database | What happens on startup |
+|---|---|
+| Empty (new local file, fresh Supabase project) | `upgrade` runs the baseline and creates all seven tables |
+| Existing but unversioned (**production Supabase**, older local files) | Every baseline table and column is checked, then the baseline is **stamped**: `alembic_version` is created and set to `0001_baseline`. **No DDL runs and no rows are touched.** |
+| Existing but missing a baseline table or column | Startup **refuses** with the list of what is missing, and stamps nothing |
+| Already versioned | `upgrade` applies anything newer, or does nothing |
 
-```python
-LATER_COLUMNS = {"photo_url": "VARCHAR(255)", "bio": "TEXT"}
+The baseline's `downgrade()` refuses to run, because undoing it would drop every
+table.
+
+### Adding a table or column
+
+```bash
+cd app/backend
+# 1. edit models.py (new columns on existing tables should be nullable)
+flask --app app db migrate -m "add vaccinations"   # autogenerate
+# 2. READ the generated file in migrations/versions/ and fix anything wrong
+flask --app app db upgrade                          # apply locally
+python test_migrations.py                           # includes a drift check
 ```
 
-### Adding a table
+Deploying applies it: on startup, `migrate_to_head()` runs `upgrade` inside the
+advisory lock. Do not add columns through `LATER_COLUMNS` any more. That mechanism
+only exists so pre-Phase-6 databases can still be stamped.
 
-Define the model and deploy — `create_all()` creates it. Nothing else to do.
+### Inspecting a database without changing it
+
+Startup migrates by default. To run `flask db` commands against a database
+without that happening first, set `DB_AUTO_MIGRATE=false`:
+
+```bash
+DB_AUTO_MIGRATE=false flask --app app db current        # which revision it is on
+DB_AUTO_MIGRATE=false flask --app app db upgrade --sql  # print the SQL, run nothing
+```
 
 ### Anything else
 
-Renaming a column, changing a type, adding a `NOT NULL` to a populated table or
-adding a constraint is **not** handled automatically. Write the SQL yourself,
-run it against the database once (Supabase's SQL editor is fine), and update the
-model to match in the same deploy. Take a backup first — see §9.
-
-**If the schema ever starts changing regularly, adopt Alembic.** The point above
-is that it is not earning its keep yet, not that it never would.
+Renames, type changes and `NOT NULL` on populated tables all need a hand-edited
+migration (autogenerate sees a rename as drop + add). Take a backup first; see §9.
 
 ### Resetting the database
 
 ```bash
-python seed.py --reset      # drops every table, recreates, reseeds
+python seed.py --reset      # drops every table and alembic_version, rebuilds, reseeds
 ```
 
 **This destroys all data** — users, volunteers, match history. Fine locally,
@@ -473,7 +579,7 @@ Supabase → **New project**. Note the database password; it appears once.
 
 ### Step 2 — get the pooler connection string
 
-**Project Settings → Database → Connection string → Session pooler** (port 6543).
+**Project Settings → Database → Connection string → Session Pooler** (port **5432**).
 
 ### Step 3 — run the verification
 
@@ -484,7 +590,7 @@ cd "D:\Dogo-Paw ITR\app\backend"
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-$env:DATABASE_URL = "postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require"
+$env:DATABASE_URL = "postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require"
 $env:APP_ENV      = "production"
 $env:SECRET_KEY   = python -c "import secrets; print(secrets.token_hex(32))"
 $env:ADMIN_PASSWORD = "choose-a-strong-password"
@@ -500,7 +606,7 @@ cd app/backend
 source .venv/bin/activate
 pip install -r requirements.txt
 
-export DATABASE_URL="postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require"
+export DATABASE_URL="postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require"
 export APP_ENV=production
 export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
 export ADMIN_PASSWORD="choose-a-strong-password"
@@ -546,8 +652,9 @@ intentionally not created in production).
 | `Can't load plugin: sqlalchemy.dialects:postgres` | URL still `postgres://` and normalisation bypassed | Use the app; do not build the engine yourself |
 | `ModuleNotFoundError: psycopg2` | URL names no driver and something skipped normalisation | `pip install -r requirements.txt`; confirm `psycopg[binary]` installed |
 | `password authentication failed` | wrong password, or `[YOUR-PASSWORD]` left in the URL | Re-copy from the dashboard |
-| `SSL connection has been closed unexpectedly` | direct connection instead of the pooler | Switch to port 6543 |
-| `too many connections` | using port 5432 with several workers | Switch to the pooler |
+| `SSL connection has been closed unexpectedly` | direct connection instead of the pooler | Use the pooler host on port 5432 |
+| `too many connections` | direct connection (`db.PROJECT_REF.supabase.co`) with several workers | Use the Session Pooler host on port 5432 |
+| Migrations fail oddly, or prepared-statement errors | Transaction Pooler (port 6543) | Switch to the Session Pooler on port 5432 |
 | Startup fails: `SECRET_KEY must be set` | `APP_ENV=production` without the rest | Set all four variables above |
 
 ---

@@ -21,6 +21,7 @@ from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash
 
 from models import Dog, User, db
+from schema import migrate_to_head
 
 IS_PRODUCTION = os.environ.get("APP_ENV", "development").strip().lower() == "production"
 
@@ -398,15 +399,15 @@ LATER_COLUMNS = {"photo_url": "VARCHAR(255)", "bio": "TEXT"}
 def ensure_columns() -> None:
     """Add any column that `dogs` is missing.
 
-    `create_all()` creates missing *tables*; it will not touch a table that
-    already exists, so a database created before Phase 6 has no `photo_url` or
+    Kept for databases older than migrations: create_all(), which built them,
+    never touched an existing table, so a database created before Phase 6 has no `photo_url` or
     `bio` and every query against `dogs` fails. SQLite has no
     `ADD COLUMN IF NOT EXISTS`, so check first, then patch — that keeps existing
     users, volunteers and match history rather than dropping the file.
     """
     inspector = inspect(db.engine)
     if "dogs" not in inspector.get_table_names():
-        return  # brand-new database; create_all() will build it correctly
+        return  # brand-new database; the baseline migration will build it
 
     existing = {column["name"] for column in inspector.get_columns("dogs")}
     added = [name for name in LATER_COLUMNS if name not in existing]
@@ -458,16 +459,58 @@ def seed(force: bool = False) -> None:
         _seed(force)
 
 
+
+def sync_dog_id_sequence() -> None:
+    """Advance dogs_id_seq past the seeded ids (PostgreSQL only).
+
+    The rows above carry explicit ids, because the dataset numbers the dogs and
+    the API exposes those numbers as `dog_id`. PostgreSQL only advances a
+    SERIAL sequence when it generates the value itself, so after seeding, the
+    sequence still points at 1 while the table holds 1-18 — and the first dog
+    inserted without an explicit id fails on a duplicate key.
+
+    Migration 0004_dog_id_sequence fixes databases that were already seeded,
+    but migrations run *before* seeding inserts anything, so a freshly created
+    database needs the same correction afterwards. Both are needed: neither
+    covers the other's case. This runs on every start and only ever moves the
+    sequence forward, so it is also self-healing and safe to repeat.
+
+    SQLite has no sequences and needs nothing.
+    """
+    if db.engine.dialect.name != "postgresql":
+        return
+    # GREATEST(...) so this only ever moves the sequence forward. Rewinding a
+    # sequence that is legitimately ahead would hand out ids that already exist.
+    db.session.execute(text("""
+        SELECT setval(
+            pg_get_serial_sequence('dogs', 'id'),
+            GREATEST(
+                (SELECT COALESCE(MAX(id), 1) FROM dogs),
+                (SELECT last_value FROM dogs_id_seq)
+            ),
+            true
+        )
+    """))
+    db.session.commit()
+
+
 def _seed(force: bool = False) -> None:
     if force:
         db.drop_all()
+        # drop_all() only knows the model tables. Left behind, the version row
+        # would tell Alembic the now-empty database is already up to date.
+        db.session.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        db.session.commit()
 
+    # ensure_columns() first: a database from before Phase 6 lacks photo_url
+    # and bio, and must have them before it can be stamped as the baseline.
     ensure_columns()
-    db.create_all()
+    migrate_to_head()
 
     if Dog.query.first() is None:
         for row in DOGS:
             db.session.add(Dog(**row))
+        db.session.commit()
         print(f"seeded {len(DOGS)} dogs")
     else:
         # The profile text and photos are seed-owned content, not user data, so
@@ -485,6 +528,10 @@ def _seed(force: bool = False) -> None:
                 updated += 1
         if updated:
             print(f"refreshed photo/bio on {updated} dogs")
+
+    # Whichever branch ran, leave the id sequence correct. Cheap, idempotent,
+    # forward-only, and it heals a database seeded before this existed.
+    sync_dog_id_sequence()
 
     for name, email, password, is_admin in default_users():
         if User.query.filter_by(email=email).first() is None:

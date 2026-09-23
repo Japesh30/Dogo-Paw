@@ -10,6 +10,8 @@ import DogProfile from './pages/DogProfile'
 import Login from './pages/Login'
 import AdoptMatch from './pages/AdoptMatch'
 import Admin from './pages/Admin'
+import AdminHealth from './pages/AdminHealth'
+import AdminDogMedical from './pages/AdminDogMedical'
 import NotFound from './pages/NotFound'
 
 export default function App() {
@@ -29,6 +31,24 @@ export default function App() {
           element={
             <ProtectedRoute requireAdmin>
               <Admin />
+            </ProtectedRoute>
+          }
+        />
+        {/* Medical data is admin-only. The guard here keeps it out of the UI;
+            the backend refuses the requests regardless. */}
+        <Route
+          path="admin/health"
+          element={
+            <ProtectedRoute requireAdmin>
+              <AdminHealth />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/health/dogs/:dogId"
+          element={
+            <ProtectedRoute requireAdmin>
+              <AdminDogMedical />
             </ProtectedRoute>
           }
         />

@@ -146,13 +146,16 @@ one that fails loudly at boot.
 ### Values you must supply
 
 ```
-DATABASE_URL = postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require
+DATABASE_URL = postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require
 CORS_ORIGINS = https://your-app.vercel.app
 ADMIN_PASSWORD = <a strong password, 12+ characters>
 ```
 
-Use the Supabase **session pooler on port 6543**, not the direct connection —
-see [`DATABASE.md`](DATABASE.md) §3. Keep `?sslmode=require`.
+Use the Supabase **Session Pooler on port 5432**, not the direct connection —
+see [`DATABASE.md`](DATABASE.md) §3. On the pooler host, 5432 is the Session
+Pooler and 6543 is the Transaction Pooler; session mode is required because
+migrations and prepared statements need a connection that outlives a single
+transaction. Keep `?sslmode=require`.
 
 > **No secret belongs in `render.yaml`.** It is committed. Every secret there is
 > declared `sync: false`, which tells Render "this exists, ask the operator" —
@@ -386,7 +389,7 @@ else. Worth knowing before the first `git push`, which will be slow.
 | `CORS_ORIGINS='*' is not allowed` | Wildcard in production | Set the exact Vercel origin |
 | `ADMIN_PASSWORD must be set` | Missing variable | Add one, 12+ characters |
 | `Can't load plugin: sqlalchemy.dialects:postgres` | `DATABASE_URL` bypassed normalisation | Use the app's own config path; see [`DATABASE.md`](DATABASE.md) §3 |
-| `too many connections` | Direct Supabase connection (5432) | Use the pooler (6543) |
+| `too many connections` | Direct Supabase connection (`db.PROJECT_REF.supabase.co`) | Use the Session Pooler host on port 5432 |
 | Worker timeout during boot | Model loading slower than the timeout | `timeout = 120` is already set; confirm the config file is being read |
 | Frontend says "could not reach the server" | Cold start, or `CORS_ORIGINS` wrong | Wait ~50 s and retry; check the origin matches exactly, including `https://` and no trailing slash |
 | `/api/model-info` returns 503 | Artifacts missing from the deploy | Confirm `ml/artifacts/*.joblib` are committed |
